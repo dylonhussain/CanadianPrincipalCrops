@@ -102,7 +102,7 @@ dbGetQuery(conn, 'SELECT * FROM FARM_PRICES
                       WHERE CROP_TYPE = "Rye" 
                       LIMIT 6')
 
-################################################################################ Provences that grew barley.
+################################################################################ Problem 7 Provences that grew barley.
 tempdf =(dbGetQuery(conn, 'SELECT DISTINCT GEO FROM FARM_PRICES
                       WHERE CROP_TYPE = "Barley"'))
 tempstring = ''
@@ -111,4 +111,14 @@ for(element in tempdf){
 }
 print(paste(tempstring, 'grew barley'))
 
-dbDisconnect(conn)
+################################################################################ Problem 8 First and last dates of FARM_DATA
+
+dbGetQuery(conn, "WITH TEMP AS (SELECT *, 
+                                        ROW_NUMBER() OVER(ORDER BY DATE DESC) AS FIRST_DATE, 
+                                        ROW_NUMBER() OVER(ORDER BY DATE ASC) AS LAST_DATE 
+                                FROM FARM_PRICES) 
+                  SELECT * FROM TEMP
+                  WHERE FIRST_DATE=1 OR LAST_DATE=1")
+
+
+#dbDisconnect(conn)
