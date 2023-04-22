@@ -5,23 +5,16 @@ library(RSQLite)
 library(tidyverse)
                                                                                 #Make connection
 conn = dbConnect(RSQLite::SQLite(), 'cropdb.sqlite')                            
-
                                                                                 #Function to run dbexecute and return errors silently
 dbExecute2 = function(conn, exp){
   tryCatch({dbExecuteErr <- dbExecute(conn, exp)}, error = function(e){dbExecuteErr <<- e$message})
-  return (dbExecuteErr)
-}
-
+  return (dbExecuteErr)}
                                                                                 #Drop existing tables so as not to error.
 table.list = list('CROP_DATA', 'DAILY_FX', 'FARM_PRICES', 'MONTHLY_FX')
 for(table in table.list){
   if(dbExistsTable(conn, table)){
-    dbExecute(conn, paste('DROP TABLE ', table))
-  }
-}
-
+    dbExecute(conn, paste('DROP TABLE ', table))  }}
 ################################################################################ Problem 1 Create tables and inform if error.
-                                                                                
 db.create.res = list()
 db.create.res[1] <- dbExecute2(conn, 
                  "CREATE TABLE CROP_DATA (
@@ -36,7 +29,6 @@ db.create.res[1] <- dbExecute2(conn,
                                       PRIMARY KEY (CD_ID)
                                           )"
                  )
- 
 db.create.res[2]  = dbExecute2(conn, "CREATE TABLE DAILY_FX (
                               DFX_ID INTEGER NOT NULL,
                               DATE DATE NOT NULL,
@@ -59,8 +51,8 @@ db.create.res[4]  = dbExecute2(conn, 'CREATE TABLE MONTHLY_FX (
                               DATE DATE NOT NULL,
                               FXUSDCAD FLOAT(6),
                               PRIMARY KEY (DFX_ID)
-                                                              )'
-                               )
+                                                              )
+                               ')
 err = FALSE
 for (res in db.create.res){
   if (!is.numeric(res)){print(res); err = TRUE}
@@ -103,6 +95,7 @@ dbGetQuery(conn, 'SELECT * FROM FARM_PRICES
                       LIMIT 6')
 
 ################################################################################ Problem 7 Provences that grew barley.
+
 tempdf =(dbGetQuery(conn, 'SELECT DISTINCT GEO FROM FARM_PRICES
                       WHERE CROP_TYPE = "Barley"'))
 tempstring = ''
@@ -114,11 +107,70 @@ print(paste(tempstring, 'grew barley'))
 ################################################################################ Problem 8 First and last dates of FARM_DATA
 
 dbGetQuery(conn, "WITH TEMP AS (SELECT *, 
-                                        ROW_NUMBER() OVER(ORDER BY DATE DESC) AS FIRST_DATE, 
-                                        ROW_NUMBER() OVER(ORDER BY DATE ASC) AS LAST_DATE 
+                                        ROW_NUMBER() OVER(ORDER BY DATE DESC) AS LAST_DATE, 
+                                        ROW_NUMBER() OVER(ORDER BY DATE ASC) AS FIRST_DATE 
                                 FROM FARM_PRICES) 
-                  SELECT * FROM TEMP
+                  SELECT DATE FROM TEMP
                   WHERE FIRST_DATE=1 OR LAST_DATE=1")
 
+################################################################################ Problem 9 farms <350
 
-#dbDisconnect(conn)
+paste(dbGetQuery(conn, "SELECT DISTINCT CROP_TYPE
+                        FROM FARM_PRICES
+                        WHERE PRICE_PRERMT >= 350"), 
+      'was the only crop to exceed $350 per metric tonne')
+
+################################################################################ Problem 10 rank Sasketchewan 2000 crops by average yield, which was best
+
+dbGetQuery(conn, "SELECT * 
+                  FROM CROP_DATA
+                  WHERE GEO = 'Saskatchewan' AND strftime('%Y', YEAR)='2000'
+                  ORDER BY AVG_YIELD DESC")
+
+paste(dbGetQuery(conn, "SELECT CROP_TYPE
+                        FROM CROP_DATA
+                        WHERE GEO = 'Saskatchewan' AND strftime('%Y', YEAR)='2000'
+                        ORDER BY AVG_YIELD DESC
+                        LIMIT  1"), 
+      "performed the best")
+
+################################################################################ Problem 11 rank crops/geo by avg yield since 2000, which had heighest
+
+dbGetQuery(conn, "SELECT CROP_TYPE, GEO, AVG_YIELD
+                  FROM CROP_DATA
+                  WHERE YEAR > 1999-12-31
+                  ORDER BY AVG_YIELD DESC
+                  LIMIT 10
+                  ")
+
+temp = dbGetQuery(conn, "SELECT CROP_TYPE, GEO, AVG_YIELD
+                        FROM CROP_DATA
+                        WHERE YEAR > 1999-12-31
+                        ORDER BY AVG_YIELD DESC
+                        LIMIT 1")
+
+paste(temp$CROP_TYPE[[1]], 'in', temp$GEO[[1]], 'had the highest yield since 2000')
+
+################################################################################ Problem 12 wheat in canada in most recent year
+
+paste(dbGetQuery(conn, "SELECT PRODUCTION
+                  FROM CROP_DATA
+                  WHERE YEAR IN (SELECT YEAR FROM CROP_DATA ORDER BY YEAR DESC LIMIT 1)
+                        AND GEO = 'Canada'
+                        AND CROP_TYPE = 'Wheat'
+                  "), 
+      'hectares of wheat were harvested in canada in the most recent year')
+
+################################################################################ Problem 13
+
+dbGetQuery(conn, "SELECT FARM_PRICES.DATE, FARM_PRICES.PRICE_PRERMT AS PRICE_CAD, (FARM_PRICES.PRICE_PRERMT / MONTHLY_FX.FXUSDCAD) AS PRICE_USD
+                  FROM MONTHLY_FX, FARM_PRICES
+                  WHERE strftime('%Y%m', MONTHLY_FX.DATE) = strftime('%Y%m', FARM_PRICES.DATE)
+                      AND CROP_TYPE = 'Canola'
+                      AND  GEO = 'Saskatchewan'
+                  ORDER BY FARM_PRICES.DATE DESC
+                  LIMIT 6
+                  ")
+
+
+dbDisconnect(conn)
